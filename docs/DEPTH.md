@@ -31,6 +31,11 @@
 | TRAP-26 | 旧版本复核 | 覆盖新结论 | 事务条件更新 | `app/store.py` | `tests/test_archive.py::test_stale_review` |
 | TRAP-11 | 时区混用 | 同刻不同桶 | UTC归整 | `app/modules/m2_mapping/coerce.py` | `tests/test_versions.py::test_same_instant` |
 | TRAP-19 | 三方约束矛盾 | 输出伪精确数 | 非负原子区域可行检查 | `app/modules/m5_calculate/rules.py` | `tests/test_calculate.py::test_three_way_contradiction` |
+| TRAP-27 | 维护期旧口径 | 沿用历史校准却计入已采信 | 校准账本分级 confirmed/carried | `app/modules/m3_versions/calibration.py` | `tests/test_calibration.py::test_carried_calibration_enters_formal_interval_but_not_certified` |
+| TRAP-28 | 校准缺失 | 静默丢弃或残缺拼区间 | 整段隔离并保留原值 | `app/modules/m3_versions/rules.py` | `tests/test_calibration.py::test_partial_bucket_is_withheld_as_a_whole` |
+| TRAP-29 | 校准重试 | 叠加修正/重复隔离 | 以原始人数为基数重算 | `app/modules/m3_versions/rules.py` | `tests/test_calibration.py::test_retrying_m3_does_not_double_apply` |
+| TRAP-30 | 校准补齐 | 全量重算或丢失旧结论 | 时段签名增量重算 | `app/modules/m4_segments/rules.py` | `tests/test_calibration.py::test_new_calibration_recomputes_only_the_filled_window` |
+| TRAP-31 | 保存失败 | 覆盖旧批次 | 事务回滚并保留旧版 | `app/store.py` | `tests/test_calibration.py::test_save_failure_keeps_previous_batch` |
 
 ## 对账规则
 

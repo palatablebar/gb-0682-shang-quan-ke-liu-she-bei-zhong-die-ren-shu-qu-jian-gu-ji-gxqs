@@ -1,6 +1,7 @@
 from collections import defaultdict
 from app.errors import DomainError
 
+
 def model(observations):
     zones={r['left']:r['count'] for r in observations if r['kind']=='zone'}
     pairs={tuple(sorted([r['left'],r['right']])):r['count'] for r in observations if r['kind']=='pair'}
@@ -15,15 +16,40 @@ def model(observations):
     if len(triples)>1:raise DomainError('CONSTRAINT','三方交集记录重复')
     return {'zones':zones,'pairs':{'|'.join(k):v for k,v in pairs.items()},'triple':triples[0] if triples else None}
 
+
 def apply(state):
     grouped=defaultdict(list)
     for r in state['observations']:grouped[r['bucket']].append(r)
-    result=[];bad_buckets=set()
-    for bucket,rows in sorted(grouped.items()):
+    prev=state.get('previous') or {}
+    old=prev.get('bucket_signatures') or {}
+    previous_models={item['bucket']:item for item in prev.get('models',[])}
+    previous_rejected=set(prev.get('bucket_rejected') or [])
+    signatures=state.get('bucket_signatures') or {}
+    withheld=set((state.get('calibration') or {}).get('withheld_buckets') or [])
+    result=[];bad_buckets=set();recomputed=[];reused=[]
+    for bucket in sorted(set(grouped)|withheld):
+        unchanged=bool(old) and old.get(bucket)==signatures.get(bucket)
+        if unchanged and bucket in previous_models:
+            item=dict(previous_models[bucket]);item['reused']=True;item['recalculated']=False
+            result.append(item);reused.append(bucket);continue
+        if unchanged and bucket in previous_rejected:
+            bad_buckets.add(bucket);reused.append(bucket)
+            for r in state['rows']:
+                if r['bucket']==bucket:state['quarantine'].append({'line':r['_line'],'id':r['id'],'code':'CONSTRAINT','raw':r['_raw'],'reused':True})
+            continue
+        recomputed.append(bucket)
+        if bucket in withheld:
+            result.append({'bucket':bucket,'model':None,'line':min((r['_line'] for r in grouped[bucket]),default=0),
+                'reused':False,'recalculated':True,'withheld':True});continue
         try:
-            result.append({'bucket':bucket,'model':model(rows),'line':min(r['_line'] for r in rows)})
+            result.append({'bucket':bucket,'model':model(grouped[bucket]),
+                'line':min(r['_line'] for r in grouped[bucket]),'reused':False,'recalculated':True,'withheld':False})
         except DomainError as e:
             bad_buckets.add(bucket)
             for r in state['rows']:
                 if r['bucket']==bucket:state['quarantine'].append({'line':r['_line'],'id':r['id'],'code':e.code,'raw':r['_raw']})
-    state['rows']=[r for r in state['rows'] if r['bucket'] not in bad_buckets];state['models']=result;return state
+    state['rows']=[r for r in state['rows'] if r['bucket'] not in bad_buckets];state['models']=result
+    state['bucket_rejected']=sorted(bad_buckets)
+    state['recompute']={'recomputed':sorted(recomputed),'reused':sorted(reused),
+        'affected':(state.get('calibration') or {}).get('affected_buckets',[])}
+    return state
